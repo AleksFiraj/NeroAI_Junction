@@ -1,0 +1,15 @@
+export const endpoints = {
+  customers: "/customers",
+  customer: (id: string) => `/customer/${id}`,
+  dashboard: "/dashboard",
+  heatmap: "/heatmap",
+  risk: (id: string) => `/risk/${id}`,
+  generateDataset: "/generate-dataset",
+  analyze: "/analyze",
+  aiExplanation: "/ai-explanation",
+  aiChat: "/ai/chat",
+  aiSummary: (id: string) => `/ai/summary/${id}`,
+  addConsumption: (id: string) => `/consumption/${id}`,
+  advanceMonth: "/advance-month",
+  review: (id: string) => `/customer/${id}/review`,
+};
