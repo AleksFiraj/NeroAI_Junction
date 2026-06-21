@@ -7,7 +7,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { monthLabel } from "../../lib/risk";
+import { monthLabel, CRIT_RED, AMBER } from "../../lib/risk";
 import type { CustomerConsumptionPoint } from "../../types/domain";
 
 interface Row {
@@ -39,7 +39,7 @@ function buildRows(history: CustomerConsumptionPoint[]): Row[] {
 function AnomalyDot(props: any) {
   const { cx, cy, payload } = props;
   if (cx == null || cy == null || !payload?.kind) return null;
-  const color = payload.kind === "drop" ? "#EF4444" : "#F59E0B";
+  const color = payload.kind === "drop" ? CRIT_RED : AMBER;
   return (
     <g>
       <circle cx={cx} cy={cy} r={6} fill={color} fillOpacity={0.18} />
@@ -51,15 +51,15 @@ function AnomalyDot(props: any) {
 export function ConsumptionChart({ data }: { data: CustomerConsumptionPoint[] }) {
   const rows = buildRows(data);
   return (
-    <div className="rounded-xl border border-border bg-surface-1 p-5">
+    <div className="rounded-2xl border border-border bg-card p-6">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-[13px] font-semibold text-text">Consumption history</h3>
-        <div className="flex items-center gap-3 text-[11px] text-text-muted">
+        <h3 className="text-base font-semibold">Consumption history</h3>
+        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: "#EF4444" }} /> drop
+            <span className="h-2 w-2 rounded-full" style={{ background: CRIT_RED }} /> drop
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: "#F59E0B" }} /> spike
+            <span className="h-2 w-2 rounded-full" style={{ background: AMBER }} /> spike
           </span>
         </div>
       </div>
@@ -68,38 +68,38 @@ export function ConsumptionChart({ data }: { data: CustomerConsumptionPoint[] })
           <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
             <defs>
               <linearGradient id="kwhFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#3B82F6" stopOpacity={0} />
+                <stop offset="0%" stopColor={AMBER} stopOpacity={0.3} />
+                <stop offset="100%" stopColor={AMBER} stopOpacity={0} />
               </linearGradient>
             </defs>
             <XAxis
               dataKey="label"
-              tick={{ fill: "#64748B", fontSize: 10 }}
-              axisLine={{ stroke: "#1F2937" }}
+              tick={{ fill: "oklch(0.70 0.02 260)", fontSize: 10 }}
+              axisLine={{ stroke: "oklch(1 0 0 / 8%)" }}
               tickLine={false}
               interval="preserveStartEnd"
               minTickGap={20}
             />
             <YAxis
-              tick={{ fill: "#64748B", fontSize: 10 }}
+              tick={{ fill: "oklch(0.70 0.02 260)", fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               width={48}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "#0F1524",
-                border: "1px solid #334155",
-                borderRadius: 6,
+                backgroundColor: "oklch(0.20 0.018 260)",
+                border: "1px solid oklch(1 0 0 / 8%)",
+                borderRadius: 8,
                 fontSize: 12,
               }}
-              labelStyle={{ color: "#94A3B8" }}
+              labelStyle={{ color: "oklch(0.70 0.02 260)" }}
               formatter={(v: any) => [`${v} kWh`, "Consumption"]}
             />
             <Area
               type="monotone"
               dataKey="kwh"
-              stroke="#3B82F6"
+              stroke={AMBER}
               strokeWidth={2}
               fill="url(#kwhFill)"
             />

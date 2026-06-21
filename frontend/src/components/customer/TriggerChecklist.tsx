@@ -40,9 +40,9 @@ export function TriggerChecklist({ triggers }: { triggers: TriggerOutput[] }) {
   const byName = new Map(triggers.map((t) => [t.trigger_name, t]));
 
   return (
-    <div className="rounded-xl border border-border bg-surface-1 p-5">
-      <h3 className="mb-4 text-[13px] font-semibold text-text">Explainability engine</h3>
-      <ul className="grid gap-2 sm:grid-cols-2">
+    <div className="rounded-2xl border border-border bg-card p-6">
+      <h3 className="mb-4 text-base font-semibold">Explainability engine</h3>
+      <ul className="grid gap-3 sm:grid-cols-2">
         {CHECKS.map((c, i) => {
           const hit = c.match.map((m) => byName.get(m)).find(Boolean);
           const active = Boolean(hit);
@@ -52,17 +52,17 @@ export function TriggerChecklist({ triggers }: { triggers: TriggerOutput[] }) {
               initial={{ opacity: 0, x: -6 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.04, duration: 0.2 }}
-              className={`flex items-start gap-2.5 rounded-md border p-3 ${
+              className={`flex items-start gap-2.5 rounded-xl border p-4 ${
                 active
-                  ? "border-border-strong bg-surface-2/60"
-                  : "border-border bg-surface-2/20 opacity-60"
+                  ? "border-border bg-background/40"
+                  : "border-border bg-background/20 opacity-50"
               }`}
             >
               <span
                 className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
                   active
-                    ? "border-safe/40 bg-safe/15 text-safe"
-                    : "border-border bg-surface-3 text-text-subtle"
+                    ? "border-[--color-success]/40 bg-[--color-success]/15 text-[--color-success]"
+                    : "border-border bg-muted text-muted-foreground"
                 }`}
               >
                 {active ? (
@@ -72,9 +72,9 @@ export function TriggerChecklist({ triggers }: { triggers: TriggerOutput[] }) {
                 )}
               </span>
               <div className="min-w-0">
-                <p className="text-[12.5px] font-medium text-text">{c.label}</p>
+                <p className="text-[12.5px] font-semibold">{c.label}</p>
                 {active && hit && (
-                  <p className="mt-0.5 truncate text-[11.5px] text-text-muted">{hit.reason}</p>
+                  <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{hit.reason}</p>
                 )}
               </div>
             </motion.li>

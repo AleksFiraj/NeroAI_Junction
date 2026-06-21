@@ -21,9 +21,9 @@ export function useReviewCustomer() {
         status: vars.status,
         note: vars.note,
       });
+      invalidate();
       return data;
     },
-    onSuccess: invalidate,
   });
 }
 
@@ -34,9 +34,9 @@ export function useAddConsumption() {
       const { data } = await apiLong.post(endpoints.addConsumption(vars.customerId), {
         consumption_kwh: vars.consumption_kwh,
       });
+      invalidate();
       return data;
     },
-    onSuccess: invalidate,
   });
 }
 
@@ -45,8 +45,36 @@ export function useAdvanceMonth() {
   return useMutation({
     mutationFn: async () => {
       const { data } = await apiLong.post(endpoints.advanceMonth, {});
+      invalidate();
       return data;
     },
-    onSuccess: invalidate,
+  });
+}
+
+export interface BulkUploadResult {
+  message: string;
+  year: number;
+  month: number;
+  rows_inserted: number;
+  rows_updated: number;
+  rows_skipped: number;
+  skipped_ids: string[];
+  records_analyzed: number | null;
+}
+
+export function useBulkUpload() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: async (vars: { year: number; month: number; file: File }): Promise<BulkUploadResult> => {
+      const form = new FormData();
+      form.append("year", String(vars.year));
+      form.append("month", String(vars.month));
+      form.append("file", vars.file);
+      const { data } = await apiLong.post(endpoints.bulkUpload, form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      invalidate();
+      return data;
+    },
   });
 }

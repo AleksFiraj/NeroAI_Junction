@@ -15,13 +15,13 @@ register(
     TriggerSpec(
         name="district_outlier_trigger",
         group=GROUP_GEOGRAPHIC,
-        threshold="> 40% below same-profile households in district",
+        threshold="> 40% below same-profile connections in district",
         evidence_window="current month, district + profile cohort",
         features_used=["deviation_from_profile_avg", "profile_peer_mean"],
         fire_threshold=0.45,
         score_fn=_district_outlier_score,
         reason_fn=lambda r: (
-            f"Usage is well below similar {r['profile']} households in {r['district']}."
+            f"Usage is well below similar {r['profile']} connections in {r['district']}."
         ),
     )
 )

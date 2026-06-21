@@ -5,10 +5,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "VoltGuard AI"
+    app_name: str = "Nero AI"
     app_env: str = "dev"
     api_prefix: str = ""
-    sqlite_path: str = "data/voltguard.db"
+    sqlite_path: str = "data/nero.db"
     model_path: str = "models/isolation_forest.joblib"
     random_seed: int = 42
     llm_api_key: str | None = None
@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     tariff_eur_per_kwh: float = 0.14
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
-    model_config = SettingsConfigDict(env_file="backend/.env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=str(Path(__file__).resolve().parent.parent / ".env"),
+        env_file_encoding="utf-8",
+    )
 
     @property
     def sqlite_url(self) -> str:

@@ -1,8 +1,10 @@
-"""Synthetic dataset generation for Tirana households and businesses.
+"""Synthetic dataset generation for Tirana electricity connections.
 
-Produces realistic 24-month consumption series for ~1000 customers spread
-across Tirana districts, driven by behavioral archetypes and the canonical
-Tirana monthly temperature profile. Fraud is injected afterwards.
+Produces realistic 24-month consumption series for ~1000 metered customers
+spread across Tirana districts, driven by consumption archetypes and the
+canonical Tirana monthly temperature profile. Only utility-observable data is
+generated (meter readings, billing records, network topology) — no demographic
+assumptions. Fraud is injected afterwards.
 """
 
 from __future__ import annotations
@@ -72,29 +74,41 @@ def _pick_district(profile: Profile, rng: np.random.Generator) -> str:
     return districts[int(rng.choice(len(districts), p=weights))]
 
 
+_METER_TYPES = ["Single-phase", "Three-phase", "Smart-meter"]
+_METER_TYPE_WEIGHTS = {"Apartment": [0.6, 0.2, 0.2], "House": [0.3, 0.5, 0.2], "Business": [0.05, 0.55, 0.4]}
+_CONNECTION_TYPES = {"Apartment": "Residential", "House": "Residential", "Business": "Commercial"}
+
+
 def _build_customers(cfg: DatasetConfig, rng: np.random.Generator) -> pd.DataFrame:
+    contract_numbers = rng.choice(
+        range(100000, 999999), size=cfg.num_customers, replace=False
+    )
     records: list[dict] = []
     for idx in range(cfg.num_customers):
         profile = _pick_profile(rng)
         district = _pick_district(profile, rng)
         geo = DISTRICTS[district]
 
-        occupants = int(rng.integers(profile.occupants_min, profile.occupants_max + 1))
-        area_m2 = float(np.round(rng.uniform(*profile.area_m2), 2))
         lat = geo["lat"] + float(rng.normal(0, geo["jitter"]))
         lon = geo["lon"] + float(rng.normal(0, geo["jitter"]))
 
         winter_target = float(rng.uniform(*profile.winter_kwh))
         summer_target = float(rng.uniform(*profile.summer_kwh))
 
+        cid = f"CUST-{idx + 1:05d}"
+        meter_weights = _METER_TYPE_WEIGHTS.get(profile.property_type, [0.5, 0.3, 0.2])
+        meter_type = _METER_TYPES[int(rng.choice(len(_METER_TYPES), p=meter_weights))]
+
         records.append(
             {
-                "customer_id": f"CUST-{idx + 1:05d}",
+                "customer_id": cid,
                 "name": _generate_name(rng),
                 "district": district,
                 "property_type": profile.property_type,
-                "occupants": occupants,
-                "area_m2": area_m2,
+                "contract_number": f"AL-{int(contract_numbers[idx])}",
+                "meter_id": f"MTR-{idx + 1:06d}",
+                "meter_type": meter_type,
+                "connection_type": _CONNECTION_TYPES.get(profile.property_type, "Residential"),
                 "latitude": round(lat, 6),
                 "longitude": round(lon, 6),
                 "profile_name": profile.name,
@@ -106,6 +120,7 @@ def _build_customers(cfg: DatasetConfig, rng: np.random.Generator) -> pd.DataFra
 
     customers = pd.DataFrame(records)
     customers = _assign_buildings(customers, rng)
+    customers = _assign_transformers(customers, rng)
 
     customers["customer_profile"] = customers.apply(
         lambda r: {
@@ -122,12 +137,12 @@ def _build_customers(cfg: DatasetConfig, rng: np.random.Generator) -> pd.DataFra
 
 
 def _assign_buildings(customers: pd.DataFrame, rng: np.random.Generator) -> pd.DataFrame:
-    """Group customers into shared buildings of similar households.
+    """Group customers into shared buildings by district and consumption profile.
 
     Buildings are formed within (district, archetype) cohorts so peers share a
-    district and a behavioral profile, mirroring how similar households cluster
-    in the same building/block. This keeps peer/neighborhood comparison clean.
-    Building size varies between 3 and 8 units.
+    district and a behavioral profile, mirroring how similar connections cluster
+    on the same building/feeder. This keeps peer/neighborhood comparison clean.
+    Building size varies between 3 and 8 connections.
     """
     building_ids = pd.Series(index=customers.index, dtype=object)
     counter = 0
@@ -145,6 +160,32 @@ def _assign_buildings(customers: pd.DataFrame, rng: np.random.Generator) -> pd.D
                 building_ids.at[i] = bid
             pos += size
     customers["building_id"] = building_ids
+    return customers
+
+
+def _assign_transformers(customers: pd.DataFrame, rng: np.random.Generator) -> pd.DataFrame:
+    """Assign a distribution transformer to each building.
+
+    Multiple nearby buildings share a transformer (10–30 customers each),
+    modelling the low-voltage network topology a utility actually has.
+    """
+    transformer_ids = pd.Series(index=customers.index, dtype=object)
+    counter = 0
+    for district, group in customers.groupby("district"):
+        buildings = group["building_id"].unique().tolist()
+        rng.shuffle(buildings)
+        pos = 0
+        slug = _district_slug(district)
+        while pos < len(buildings):
+            counter += 1
+            size = int(rng.integers(2, 6))
+            chunk = buildings[pos : pos + size]
+            tid = f"TRF-{slug}-{counter:04d}"
+            for bid in chunk:
+                mask = customers["building_id"] == bid
+                transformer_ids.loc[mask] = tid
+            pos += size
+    customers["transformer_id"] = transformer_ids
     return customers
 
 
@@ -226,12 +267,15 @@ def replace_dataset_in_db(
             building_id=row.building_id,
             district=row.district,
             property_type=row.property_type,
-            occupants=int(row.occupants),
-            area_m2=float(row.area_m2),
+            contract_number=row.contract_number,
+            meter_id=row.meter_id,
+            meter_type=row.meter_type,
+            connection_type=row.connection_type,
+            transformer_id=row.transformer_id,
             latitude=float(row.latitude),
             longitude=float(row.longitude),
             customer_profile=row.customer_profile,
-            fraud_type=row.fraud_type,
+            fraud_type=row.fraud_type if pd.notna(row.fraud_type) else None,
         )
         for row in customers_df.itertuples(index=False)
     ]

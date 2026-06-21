@@ -23,6 +23,7 @@ export interface CustomerListItem {
   risk_score: number | null;
   confidence_score: number | null;
   estimated_loss_eur: number | null;
+  loss_label: string;
   status: RiskStatus | null;
 }
 
@@ -37,8 +38,11 @@ export interface CustomerConsumptionPoint {
 }
 
 export interface CustomerDetail extends CustomerListItem {
-  occupants: number;
-  area_m2: number;
+  contract_number: string;
+  meter_id: string;
+  meter_type: string;
+  connection_type: string;
+  transformer_id: string;
   latitude: number;
   longitude: number;
   customer_profile: Record<string, unknown>;
@@ -63,6 +67,7 @@ export interface RiskData {
   status: RiskStatus;
   groups_fired: number;
   estimated_loss_eur: number;
+  loss_label: string;
   reasons: string[];
   comparisons: Record<string, number>;
   triggers: TriggerOutput[];

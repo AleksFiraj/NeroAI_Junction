@@ -61,6 +61,7 @@ def get_dashboard(db: Session = Depends(get_db)) -> DashboardResponse:
             risk_score=row.risk_score,
             confidence_score=row.confidence_score,
             estimated_loss_eur=row.estimated_loss_eur,
+            loss_label=row.loss_label or "",
             status=row.status,
         )
         for row in top

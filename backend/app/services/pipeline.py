@@ -76,26 +76,71 @@ def _status_for(risk_score: float) -> str:
     return "Normal"
 
 
+# Financial-impact bands (EUR) used to phrase the estimated loss for inspectors.
+HIGH_LOSS_EUR = 80.0
+MODERATE_LOSS_EUR = 40.0
+LOW_LOSS_EUR = 20.0
+
+
+def _classify_loss(risk_score: float, loss_eur: float) -> str:
+    """Human-readable label separating behavioral risk from financial impact.
+
+    Risk is a behavioral-anomaly score; loss is a pure financial figure. The
+    label makes the (legitimate) high-risk / low-loss combination explicit so
+    the UI never conflates the two.
+    """
+    if risk_score >= CRITICAL_THRESHOLD:
+        if loss_eur >= HIGH_LOSS_EUR:
+            return "High priority investigation"
+        if loss_eur < LOW_LOSS_EUR:
+            return "Low financial impact anomaly"
+        return "High-risk behavior, moderate loss"
+    if risk_score >= SUSPICIOUS_THRESHOLD:
+        if loss_eur >= MODERATE_LOSS_EUR:
+            return "Moderate financial risk"
+        return "Behavioral anomaly under review"
+    return "Within normal range"
+
+
 def _build_customer_summaries(df: pd.DataFrame) -> pd.DataFrame:
     """Customer-level risk = mean of top-3 risk months over the last 12 months.
 
-    The representative (highest-risk) month supplies the trigger evidence, and
-    estimated loss is the unbilled energy (expected - actual) over flagged
-    recent months, valued at the configured tariff.
+    The representative (highest-risk) month supplies the trigger evidence.
+
+    Estimated loss is a purely financial figure, independent of the ML anomaly
+    score and the risk score:
+
+        loss_kwh  = max(0, expected_kwh_baseline - actual_kwh)   per month
+        loss_eur  = sum(loss_kwh) * tariff
+        final_eur = loss_eur * confidence_weight
+
+    where the expected baseline is peer-anchored (see engineer._add_expected
+    _baseline) and the confidence weight (clamped 0.4..1.0 of the risk score)
+    keeps the reported figure proportionate to how anomalous the behavior is,
+    without letting risk *create* loss where there is no kWh shortfall.
     """
     tariff = get_settings().tariff_eur_per_kwh
     df = df.sort_values(["customer_id", "year", "month"])
+    has_baseline = "expected_kwh_baseline" in df.columns
     summaries: list[dict] = []
     for customer_id, group in df.groupby("customer_id"):
         recent = group.tail(RECENT_WINDOW_MONTHS)
         summary_risk = round(float(recent["risk_score"].nlargest(TOP_N_MONTHS).mean()), 2)
         rep = recent.loc[recent["risk_score"].idxmax()]
 
-        flagged = recent[recent["risk_score"] >= SUSPICIOUS_THRESHOLD]
-        shortfall = (flagged["expected_usage_by_month"] - flagged["consumption_kwh"]).clip(
-            lower=0
-        )
-        estimated_loss = round(float(shortfall.sum()) * tariff, 2)
+        # Loss reflects ONLY the kWh deviation below the peer-anchored expected
+        # level. We count every recent month with a real shortfall (not just
+        # risk-flagged months) so the financial figure is independent of the
+        # behavioral score.
+        baseline_col = "expected_kwh_baseline" if has_baseline else "expected_usage_by_month"
+        shortfall_kwh = (recent[baseline_col] - recent["consumption_kwh"]).clip(lower=0)
+        raw_loss_eur = float(shortfall_kwh.sum()) * tariff
+
+        # Confidence weight prevents misleading high-risk / tiny-loss displays
+        # while never inflating loss beyond the actual kWh shortfall value.
+        confidence_weight = min(1.0, max(0.4, summary_risk / 100.0))
+        estimated_loss = round(raw_loss_eur * confidence_weight, 2)
+        loss_label = _classify_loss(summary_risk, estimated_loss)
 
         summaries.append(
             {
@@ -112,6 +157,7 @@ def _build_customer_summaries(df: pd.DataFrame) -> pd.DataFrame:
                 "status": _status_for(summary_risk),
                 "groups_fired": int(rep["groups_fired"]),
                 "estimated_loss_eur": estimated_loss,
+                "loss_label": loss_label,
                 "reasons_json": rep["reasons_json"],
                 "comparisons_json": rep["comparisons_json"],
                 "triggers_json": rep["triggers_json"],

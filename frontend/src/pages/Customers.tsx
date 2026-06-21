@@ -3,12 +3,15 @@ import { Search, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCustomers } from "../hooks/useCustomers";
-import { eur, riskColor } from "../lib/risk";
+import { eur, SALMON, AMBER, MINT } from "../lib/risk";
 import { RiskBadge } from "../components/ui/RiskBadge";
+import { LossTooltip } from "../components/ui/LossTooltip";
 import type { CustomerListItem } from "../types/domain";
 
 function CustomerCard({ c, index }: { c: CustomerListItem; index: number }) {
   const score = c.risk_score ?? 0;
+  const initial = (c.name || "?").charAt(0);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -17,43 +20,39 @@ function CustomerCard({ c, index }: { c: CustomerListItem; index: number }) {
     >
       <Link
         to={`/customers/${c.customer_id}`}
-        className="group block rounded-xl border border-border bg-surface-1 p-4 transition-colors hover:border-border-strong hover:bg-surface-2/40"
+        className="group block rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary/30"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-full text-[13px] font-semibold"
-              style={{ background: `${riskColor(score)}22`, color: riskColor(score) }}
-            >
-              {(c.name || "?").charAt(0)}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-[13px] font-medium text-text">{c.name}</p>
-              <p className="truncate font-mono text-[10.5px] text-text-subtle">{c.customer_id}</p>
-            </div>
+        <div className="flex items-start gap-3">
+          <div
+            className="grid h-9 w-9 place-items-center rounded-md text-sm font-semibold"
+            style={{ background: `color-mix(in oklab, ${AMBER} 18%, transparent)`, color: AMBER }}
+          >
+            {initial}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold leading-tight truncate">{c.name}</div>
+            <div className="mono text-[11px] text-muted-foreground">{c.customer_id}</div>
           </div>
           <RiskBadge status={c.status} />
         </div>
 
-        <div className="mt-3 flex items-center justify-between text-[11.5px] text-text-muted">
-          <span className="truncate">{c.district}</span>
-          <span>{c.property_type}</span>
+        <div className="mt-5 flex items-end justify-between">
+          <div>
+            <div className="mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Risk</div>
+            <div className="mono text-3xl font-bold leading-none" style={{ color: SALMON }}>{Math.round(score)}</div>
+          </div>
+          <div className="text-right text-sm">
+            <div className="text-foreground/90">{c.district}</div>
+            <div className="text-muted-foreground">{c.property_type}</div>
+          </div>
         </div>
 
-        <div className="mt-3 flex items-end justify-between">
-          <div>
-            <p className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-text-subtle">Risk</p>
-            <p
-              className="font-mono text-[20px] font-semibold tabular"
-              style={{ color: riskColor(score) }}
-            >
-              {Math.round(score)}
-            </p>
+        {(c.estimated_loss_eur ?? 0) > 0 && (
+          <div className="mt-4 flex items-center justify-end gap-1 border-t border-border pt-3 mono text-sm" style={{ color: MINT }}>
+            {eur(c.estimated_loss_eur)}
+            <LossTooltip label={c.loss_label} />
           </div>
-          {(c.estimated_loss_eur ?? 0) > 0 && (
-            <span className="text-[11px] text-text-muted">{eur(c.estimated_loss_eur)}</span>
-          )}
-        </div>
+        )}
       </Link>
     </motion.div>
   );
@@ -74,40 +73,38 @@ export function CustomersPage() {
             c.district.toLowerCase().includes(q),
         )
       : data;
-    // Default view: a mixed sample of risk levels.
     return [...base].sort((a, b) => (b.risk_score ?? 0) - (a.risk_score ?? 0));
   }, [data, query]);
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-subtle" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name, ID, or district..."
-            className="w-full rounded-md border border-border bg-surface-1 py-2 pl-9 pr-3 text-[13px] text-text placeholder:text-text-subtle focus:border-accent focus:outline-none"
+            className="w-full rounded-xl border border-border bg-card py-3 pl-11 pr-4 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
         </div>
-        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-text-subtle">
-          {filtered.length} customers
-        </span>
-        <button className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface-1 px-3 font-mono text-[11px] uppercase tracking-[0.06em] text-text-muted transition-colors hover:border-border-strong hover:text-text">
-          <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2} />
-          Filter
+        <div className="mono text-xs text-muted-foreground sm:px-3">
+          {(data ?? []).length.toLocaleString()} customers
+        </div>
+        <button className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm hover:border-primary/40">
+          <SlidersHorizontal className="h-4 w-4" /> Filter
         </button>
       </div>
 
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-36 animate-pulse rounded-xl bg-surface-2" />
+            <div key={i} className="h-44 animate-pulse rounded-2xl bg-card" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filtered.slice(0, 60).map((c, i) => (
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.slice(0, 48).map((c, i) => (
             <CustomerCard key={c.customer_id} c={c} index={i} />
           ))}
         </div>

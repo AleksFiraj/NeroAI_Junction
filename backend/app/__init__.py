@@ -1,1 +1,1 @@
-# VoltGuard backend package.
+# Nero AI backend package.

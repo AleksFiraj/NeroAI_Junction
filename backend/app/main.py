@@ -12,13 +12,22 @@ from app.services.pipeline import ensure_seeded
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list or ["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if settings.app_env == "dev":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"https?://.*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origin_list or ["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 @app.on_event("startup")
@@ -35,7 +44,7 @@ def startup_event() -> None:
 
 @app.get("/")
 def healthcheck() -> dict:
-    return {"service": "VoltGuard AI", "status": "ok"}
+    return {"service": "Nero AI", "status": "ok"}
 
 
 app.include_router(api_router, prefix=settings.api_prefix)

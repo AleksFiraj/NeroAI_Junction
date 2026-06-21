@@ -18,3 +18,14 @@ class ActionResponse(BaseModel):
     year: int | None = None
     month: int | None = None
     records_analyzed: int | None = None
+
+
+class BulkUploadResponse(BaseModel):
+    message: str
+    year: int
+    month: int
+    rows_inserted: int
+    rows_updated: int
+    rows_skipped: int
+    skipped_ids: list[str] = []
+    records_analyzed: int | None = None

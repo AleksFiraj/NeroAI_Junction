@@ -12,4 +12,5 @@ export const endpoints = {
   addConsumption: (id: string) => `/consumption/${id}`,
   advanceMonth: "/advance-month",
   review: (id: string) => `/customer/${id}/review`,
+  bulkUpload: "/bulk-upload",
 };

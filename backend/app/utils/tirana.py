@@ -1,6 +1,6 @@
 """Tirana, Albania geographic and climate constants.
 
-All synthetic data in VoltGuard is anchored to the city of Tirana. This module
+All synthetic data in Nero AI is anchored to the city of Tirana. This module
 is the single source of truth for districts, their approximate coordinates, the
 realistic monthly temperature profile, and season/holiday helpers.
 """

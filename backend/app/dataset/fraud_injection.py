@@ -1,6 +1,6 @@
 """Fraud injection for ~10% of customers.
 
-Implements the five non-technical-loss patterns VoltGuard must detect. Each
+Implements the five non-technical-loss patterns Nero AI must detect. Each
 injected customer is labelled with a `fraud_type`, and every affected monthly
 record is flagged with `anomaly = 1` and the matching `anomaly_type`.
 """

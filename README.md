@@ -1,7 +1,7 @@
-# VoltGuard AI
+# Nero AI AI
 
-Explainable, trigger-based electricity-theft detection for **Tirana, Albania**. VoltGuard
-generates a realistic synthetic dataset of Tirana households and businesses, learns
+Explainable, trigger-based electricity-theft detection for **Tirana, Albania**. Nero AI
+generates a realistic synthetic dataset of metered electricity connections, learns
 normal consumption behavior per customer, and detects non-technical losses (meter
 tampering, illegal connections, seasonal manipulation, neighborhood anomalies, gradual
 theft) using a hybrid of statistical triggers and an Isolation Forest, producing an
@@ -11,7 +11,7 @@ explainable 0-100 risk score.
 
 - Backend: Python, FastAPI, SQLite, Pandas, NumPy, scikit-learn (Isolation Forest)
 - Frontend: React (Vite + TypeScript), TailwindCSS, Recharts, Leaflet, React Query, Framer Motion
-- Runtime artifacts: `data/voltguard.db`, `models/isolation_forest.joblib`
+- Runtime artifacts: `data/nero.db`, `models/isolation_forest.joblib`
 
 ## Backend architecture (`backend/app`)
 
@@ -33,7 +33,7 @@ explainable 0-100 risk score.
   Single Professional, Retired Couple, Small Business.
 - 24 months per customer driven by the canonical Tirana monthly temperatures
   (Jan 5 deg C ... Jul/Aug 28 deg C ... Dec 7 deg C).
-- Customers cluster into shared buildings of similar households for clean peer comparison.
+- Customers cluster into shared buildings and transformers for clean peer comparison.
 - Fraud injected into 10% of customers across all 5 patterns.
 
 ## Trigger Registry System
@@ -81,7 +81,7 @@ Suspicious (>= 38) / Critical (>= 65).
 
 ## AI assistant (Gemini, strict)
 
-The AI may ONLY narrate / answer questions about the computed VoltGuard analysis data. It
+The AI may ONLY narrate / answer questions about the computed Nero AI analysis data. It
 never computes risk, detects anomalies, or influences scoring. A strict factual context
 is built from the database and the model is instructed not to invent facts. Set
 `GEMINI_API_KEY` in `backend/.env` to enable real Gemini; otherwise a deterministic,
@@ -104,7 +104,7 @@ Gemini investigation assistant.
 ### 3) Start backend (from repo root)
 
 ```bash
-python -m uvicorn app.main:app --app-dir backend --reload
+python -m uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000 --reload
 ```
 
 On first boot the backend generates the Tirana dataset once, trains the model, and runs
@@ -119,6 +119,16 @@ cd frontend && npm run dev
 ```
 
 Frontend URL: `http://localhost:5173`
+
+### Open on other devices (same Wi‑Fi / LAN)
+
+1. Start backend and frontend as above.
+2. In the frontend terminal, Vite prints a **Network** URL (e.g. `http://192.168.1.42:5173`).
+3. On your phone or another PC, open that Network URL in the browser.
+
+The dev server binds to all interfaces (`host: true`) and proxies API calls to the backend, so other devices only need port **5173** open on your machine. Ensure Windows Firewall allows incoming connections on that port if prompted.
+
+To use a custom backend port when proxying, set `VITE_API_PROXY_TARGET=http://127.0.0.1:8000` in `frontend/.env`.
 
 ## API Endpoints
 

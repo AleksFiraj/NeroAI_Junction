@@ -1,72 +1,117 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-@theme {
-  /* Surfaces */
-  --color-bg: #0A0F1C;
-  --color-surface-1: #0F1524;
-  --color-surface-2: #161D2E;
-  --color-surface-3: #1F2937;
-  --color-card: #0F1524;
-  --color-card-hover: #161D2E;
-  --color-surface: #1F2937;
+@theme inline {
+  --radius: 0.75rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 
-  /* Borders */
-  --color-border: #1F2937;
-  --color-border-strong: #334155;
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
 
-  /* Text */
-  --color-text: #F1F5F9;
-  --color-text-muted: #94A3B8;
-  --color-text-subtle: #64748B;
-  --color-text-label: #64748B;
-
-  /* Brand + semantics */
-  --color-accent: #3B82F6;
-  --color-accent-hover: #2563EB;
-  --color-safe: #10B981;
-  --color-warning: #F59E0B;
-  --color-critical: #EF4444;
-
-  /* Fonts */
-  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono",
-    Menlo, Consolas, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-foreground: var(--tertiary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-critical: var(--critical);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
 }
 
 :root {
-  font-family: var(--font-sans);
-  font-feature-settings: "cv11", "ss01", "ss03";
-  color: #f1f5f9;
-  background-color: #0a0f1c;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  --background: oklch(0.16 0.015 260);
+  --foreground: oklch(0.97 0.01 90);
+  --card: oklch(0.20 0.018 260);
+  --card-foreground: oklch(0.97 0.01 90);
+  --popover: oklch(0.20 0.018 260);
+  --popover-foreground: oklch(0.97 0.01 90);
+
+  --primary: oklch(0.78 0.17 75);
+  --primary-foreground: oklch(0.16 0.015 260);
+
+  --secondary: oklch(0.72 0.17 160);
+  --secondary-foreground: oklch(0.16 0.015 260);
+
+  --tertiary: oklch(0.62 0.21 280);
+  --tertiary-foreground: oklch(0.99 0 0);
+
+  --muted: oklch(0.24 0.02 260);
+  --muted-foreground: oklch(0.70 0.02 260);
+
+  --accent: oklch(0.26 0.025 260);
+  --accent-foreground: oklch(0.97 0.01 90);
+
+  --destructive: oklch(0.48 0.20 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --success: oklch(0.72 0.17 160);
+  --warning: oklch(0.78 0.17 75);
+  --critical: oklch(0.48 0.20 25);
+
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 10%);
+  --ring: oklch(0.78 0.17 75);
+
+  --sidebar: oklch(0.13 0.012 260);
+  --sidebar-foreground: oklch(0.97 0.01 90);
+  --sidebar-accent: oklch(0.22 0.025 260);
+  --sidebar-border: oklch(1 0 0 / 6%);
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html, body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .mono {
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  background-color: #0a0f1c;
-  color: #f1f5f9;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* Numbers: tabular figures by default in data contexts */
-.tabular {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-}
-
-/* Scrollbar polish */
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -75,51 +120,31 @@ a {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1f2937;
+  background: oklch(0.24 0.02 260);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
-}
-
-/* Subtle risk attention: soft border breathe (no flashing box-shadow) */
-.risk-attention {
-  position: relative;
-  isolation: isolate;
-}
-.risk-attention::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  pointer-events: none;
-  border: 1px solid rgba(239, 68, 68, 0.45);
-  animation: riskBreathe 3.2s ease-in-out infinite;
-  z-index: -1;
-}
-@keyframes riskBreathe {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
+  background: oklch(0.30 0.02 260);
 }
 
 /* Leaflet dark surface */
 .leaflet-container {
-  background: #0a0f1c !important;
+  background: oklch(0.16 0.015 260) !important;
   font-family: var(--font-sans) !important;
 }
 .leaflet-tooltip.risk-tooltip {
-  background: #161d2e !important;
-  border: 1px solid #334155 !important;
+  background: oklch(0.20 0.018 260) !important;
+  border: 1px solid oklch(1 0 0 / 8%) !important;
   border-radius: 6px !important;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
-  color: #f1f5f9 !important;
+  color: oklch(0.97 0.01 90) !important;
   padding: 8px 10px !important;
 }
 .leaflet-tooltip.risk-tooltip::before {
   display: none !important;
 }
 
-/* Reduced motion respect */
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -15,6 +15,7 @@ class RiskResponse(BaseModel):
     status: str
     groups_fired: int = 0
     estimated_loss_eur: float = 0.0
+    loss_label: str = ""
     reasons: list[str]
     comparisons: dict
     triggers: list[dict] = []

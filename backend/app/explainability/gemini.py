@@ -1,6 +1,6 @@
 """Gemini-grounded investigation assistant.
 
-The LLM is used ONLY to narrate / answer questions about the VoltGuard analysis
+The LLM is used ONLY to narrate / answer questions about the Nero AI analysis
 data. A strict factual context is built from the database and the model is
 instructed to never invent facts. Without a GEMINI_API_KEY the module returns
 deterministic, data-grounded answers from the same context.
@@ -9,6 +9,7 @@ deterministic, data-grounded answers from the same context.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import httpx
@@ -17,15 +18,27 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db.models import Consumption, Customer, CustomerRiskSummary
 
+log = logging.getLogger(__name__)
+
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 SYSTEM_INSTRUCTION = (
-    "You are VoltGuard's electricity-fraud investigation assistant for Tirana, "
-    "Albania. Answer ONLY using the VoltGuard analysis data provided in the "
+    "You are Nero AI's electricity-fraud investigation assistant for Tirana, "
+    "Albania. Answer ONLY using the Nero AI analysis data provided in the "
     "context. Never invent numbers, names, customers, or findings. If the answer "
-    "is not in the data, say you do not have that information. Be concise, "
-    "professional, and specific. Do not claim certainty of fraud; describe "
-    "evidence, risk, and confidence."
+    "is not in the data, say you do not have that information.\n\n"
+    "RESPONSE FORMAT RULES (strictly follow):\n"
+    "- Keep every answer to 3–5 sentences maximum.\n"
+    "- Lead with the most important finding or conclusion first.\n"
+    "- Use plain language an inspector can act on — avoid raw metric names, "
+    "decimal scores, or JSON field names.\n"
+    "- When citing numbers, round to whole numbers or one decimal and include "
+    "units (e.g. '82%', '~€1,200', '45 kWh').\n"
+    "- Do NOT dump lists of all data fields. Only mention what directly answers "
+    "the question.\n"
+    "- Do not claim certainty of fraud; describe evidence, risk level, and "
+    "confidence in human terms (e.g. 'high confidence', 'moderate risk').\n"
+    "- End with a concrete recommended next step when appropriate."
 )
 
 
@@ -55,9 +68,10 @@ def build_customer_context(db: Session, customer_id: str) -> dict[str, Any] | No
         "district": customer.district,
         "building_id": customer.building_id,
         "property_type": customer.property_type,
+        "connection_type": customer.connection_type,
+        "meter_type": customer.meter_type,
+        "transformer_id": customer.transformer_id,
         "archetype": profile.get("archetype"),
-        "occupants": customer.occupants,
-        "area_m2": customer.area_m2,
         "expected_winter_kwh": profile.get("expected_winter_kwh"),
         "expected_summer_kwh": profile.get("expected_summer_kwh"),
         "review_status": customer.review_status,
@@ -102,18 +116,50 @@ def _context_text(ctx: dict[str, Any]) -> str:
 def _fallback_answer(ctx: dict[str, Any], question: str) -> str:
     name = ctx.get("name") or ctx.get("customer_id")
     status = ctx.get("status", "Unknown")
-    risk = ctx.get("risk_score", 0)
-    conf = ctx.get("confidence_score", 0)
-    loss = ctx.get("estimated_loss_eur", 0)
+    risk = round(ctx.get("risk_score", 0))
+    conf = round(ctx.get("confidence_score", 0))
+    loss = round(ctx.get("estimated_loss_eur", 0))
     reasons = ctx.get("reasons", []) or []
     groups = ctx.get("trigger_groups_in_agreement", 0)
-    bullets = " ".join(f"- {r}" for r in reasons[:5]) or "- No fraud-indicating triggers fired."
+    components = ctx.get("risk_components", {})
+
+    risk_label = "high" if risk >= 70 else "moderate" if risk >= 40 else "low"
+    conf_label = "high" if conf >= 75 else "moderate" if conf >= 50 else "low"
+
+    q = question.lower()
+
+    if "loss" in q or "cost" in q or "financial" in q or "money" in q:
+        return (
+            f"The estimated unbilled energy for {name} is approximately €{loss:,}. "
+            f"This is calculated from the gap between expected and actual consumption "
+            f"across flagged months, valued at the configured tariff rate. "
+            f"The customer's risk score is {risk}/100 with {conf_label} confidence."
+        )
+
+    if "confiden" in q or "how sure" in q or "certain" in q:
+        return (
+            f"The fraud assessment confidence for {name} is {conf}% ({conf_label}). "
+            f"This is based on {groups} independent trigger groups firing in agreement. "
+            f"Higher group agreement means the anomaly is corroborated by multiple "
+            f"independent detection methods, not just a single signal."
+        )
+
+    if "detect" in q or "how" in q or "found" in q or "why" in q:
+        top_reasons = reasons[:3] if reasons else ["No specific triggers fired."]
+        evidence = " ".join(top_reasons)
+        strongest = max(components.items(), key=lambda x: x[1], default=("none", 0))
+        return (
+            f"{name} was detected through {groups} trigger groups firing together. "
+            f"The strongest signal comes from {strongest[0].replace('_', ' ')} analysis. "
+            f"Key findings: {evidence}"
+        )
+
+    top_reason = reasons[0] if reasons else "No specific fraud indicators were triggered."
     return (
-        f"{name} ({ctx.get('district', 'Tirana')}) is currently classified as "
-        f"{status} with a risk score of {risk}/100 and {conf}% confidence, "
-        f"supported by {groups} independent trigger groups in agreement. "
-        f"Estimated unbilled energy value is approximately EUR {loss}. "
-        f"Key evidence: {bullets} "
+        f"{name} in {ctx.get('district', 'Tirana')} is flagged as {status} "
+        f"with {risk_label} risk ({risk}/100) and {conf_label} confidence ({conf}%). "
+        f"The primary concern: {top_reason} "
+        f"Estimated unbilled energy is approximately €{loss:,}. "
         "Recommended next step: schedule an on-site meter-integrity inspection."
     )
 
@@ -122,13 +168,56 @@ def _fallback_summary(ctx: dict[str, Any]) -> str:
     return _fallback_answer(ctx, "summary")
 
 
+def _data_report(ctx: dict[str, Any], question: str = "") -> str:
+    name = ctx.get("name") or ctx.get("customer_id")
+    customer_id = ctx.get("customer_id", "N/A")
+    district = ctx.get("district", "Tirana")
+    status = ctx.get("status", "Unknown")
+    risk = round(ctx.get("risk_score", 0))
+    conf = round(ctx.get("confidence_score", 0))
+    loss = round(ctx.get("estimated_loss_eur", 0))
+    reasons = ctx.get("reasons", []) or []
+    groups = ctx.get("trigger_groups_in_agreement", 0)
+    components = ctx.get("risk_components", {}) or {}
+    strongest_component = max(components.items(), key=lambda x: x[1], default=("unknown", 0.0))
+
+    recent = ctx.get("recent_consumption_kwh", []) or []
+    last3 = recent[-3:]
+    if last3:
+        avg_last3 = round(sum(float(item.get("consumption_kwh", 0)) for item in last3) / len(last3), 1)
+        recent_line = f"Recent usage (last 3 months average): {avg_last3} kWh."
+    else:
+        recent_line = "Recent usage (last 3 months average): not available."
+
+    reason_lines = reasons[:3] if reasons else ["No specific fraud indicators were triggered."]
+    reason_block = "\n".join(f"- {r}" for r in reason_lines)
+
+    return (
+        "Investigation report (data-based fallback):\n"
+        f"- Customer: {name} ({customer_id})\n"
+        f"- Location/Network: {district}, building {ctx.get('building_id', 'N/A')}, transformer {ctx.get('transformer_id', 'N/A')}\n"
+        f"- Risk: {status} ({risk}/100) with {conf}% confidence, based on {groups} trigger groups in agreement\n"
+        f"- Estimated unbilled energy value: approximately €{loss:,}\n"
+        f"- Strongest signal: {strongest_component[0].replace('_', ' ')} ({round(float(strongest_component[1]) * 100)}%)\n"
+        f"- {recent_line}\n"
+        "Key findings:\n"
+        f"{reason_block}\n"
+        "Recommended action: prioritize meter-integrity inspection and on-site verification."
+    )
+
+
+GEMINI_TIMEOUT_SECONDS = 10
+GEMINI_TIMEOUT_SENTINEL = "__gemini_timeout__"
+
+
 async def _call_gemini(system: str, context_text: str, turns: list[dict[str, str]]) -> str | None:
     settings = get_settings()
     if not settings.gemini_api_key:
+        log.warning("GEMINI_API_KEY is not set — using data-based answer")
         return None
 
     contents: list[dict[str, Any]] = [
-        {"role": "user", "parts": [{"text": f"VoltGuard analysis data context:\n{context_text}"}]},
+        {"role": "user", "parts": [{"text": f"Nero AI analysis data context:\n{context_text}"}]},
         {"role": "model", "parts": [{"text": "Understood. I will answer only from this data."}]},
     ]
     for turn in turns:
@@ -138,20 +227,34 @@ async def _call_gemini(system: str, context_text: str, turns: list[dict[str, str
     payload = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": contents,
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 400},
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1024},
     }
     url = GEMINI_URL.format(model=settings.gemini_model)
+    log.info("Calling Gemini model=%s (timeout=%ds)", settings.gemini_model, GEMINI_TIMEOUT_SECONDS)
+
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=GEMINI_TIMEOUT_SECONDS) as client:
             resp = await client.post(
                 url, params={"key": settings.gemini_api_key}, json=payload
             )
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                log.warning("Gemini returned HTTP %s — using data-based answer", resp.status_code)
+                return None
             data = resp.json()
-            parts = data["candidates"][0]["content"]["parts"]
-            text = "".join(p.get("text", "") for p in parts).strip()
+            candidates = data.get("candidates") or []
+            if not candidates:
+                log.warning("Gemini returned no candidates — using data-based answer")
+                return None
+            parts = candidates[0].get("content", {}).get("parts") or []
+            text = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
+            if text:
+                log.info("Gemini responded successfully (%d chars)", len(text))
             return text or None
+    except httpx.TimeoutException:
+        log.info("Gemini timed out after %ds — using data-based answer", GEMINI_TIMEOUT_SECONDS)
+        return GEMINI_TIMEOUT_SENTINEL
     except Exception:
+        log.exception("Gemini call failed — using data-based answer")
         return None
 
 
@@ -163,7 +266,10 @@ async def investigate_chat(
         return {"mode": "error", "answer": "Customer not found."}
 
     text = await _call_gemini(SYSTEM_INSTRUCTION, _context_text(ctx), messages)
-    if text is None:
+    if text == GEMINI_TIMEOUT_SENTINEL:
+        last = messages[-1]["content"] if messages else ""
+        return {"mode": "data_report", "answer": _data_report(ctx, last)}
+    if not text:
         last = messages[-1]["content"] if messages else ""
         return {"mode": "fallback", "answer": _fallback_answer(ctx, last)}
     return {"mode": "gemini", "answer": text}
@@ -185,6 +291,8 @@ async def investigate_summary(db: Session, customer_id: str) -> dict[str, Any]:
         }
     ]
     text = await _call_gemini(SYSTEM_INSTRUCTION, _context_text(ctx), prompt)
-    if text is None:
+    if text == GEMINI_TIMEOUT_SENTINEL:
+        return {"mode": "data_report", "summary": _data_report(ctx, "summary")}
+    if not text:
         return {"mode": "fallback", "summary": _fallback_summary(ctx)}
     return {"mode": "gemini", "summary": text}

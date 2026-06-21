@@ -1,12 +1,15 @@
 import { AnimatePresence, motion } from "framer-motion";
+import type { ReactNode } from "react";
 import { useState } from "react";
-import { eur, riskBreakdown, riskColor, type RiskComponents } from "../../lib/risk";
+import { eur, riskBreakdown, riskColor, SALMON, type RiskComponents } from "../../lib/risk";
+import { LossTooltip } from "../ui/LossTooltip";
 
 interface Props {
   riskScore: number;
   confidence: number;
   status: string;
   estimatedLoss?: number;
+  lossLabel?: string;
   components: RiskComponents;
 }
 
@@ -18,7 +21,7 @@ function Gauge({ score }: { score: number }) {
   return (
     <div className="relative h-[132px] w-[132px]">
       <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-        <circle cx="60" cy="60" r={r} fill="none" stroke="#1F2937" strokeWidth="9" />
+        <circle cx="60" cy="60" r={r} fill="none" stroke="var(--color-muted)" strokeWidth="9" />
         <motion.circle
           cx="60"
           cy="60"
@@ -34,30 +37,30 @@ function Gauge({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-mono text-[30px] font-semibold tabular" style={{ color }}>
+        <span className="mono text-[30px] font-semibold tabular" style={{ color: SALMON }}>
           {Math.round(score)}
         </span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-text-subtle">Risk</span>
+        <span className="mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Risk</span>
       </div>
     </div>
   );
 }
 
-export function RiskScoreCard({ riskScore, confidence, status, estimatedLoss, components }: Props) {
+export function RiskScoreCard({ riskScore, confidence, status, estimatedLoss, lossLabel, components }: Props) {
   const [hover, setHover] = useState(false);
   const canBreakdown = riskScore > 60;
   const breakdown = riskBreakdown(components);
 
   return (
     <div
-      className="relative flex flex-col items-center rounded-xl border border-border bg-surface-1 p-5"
+      className="relative flex flex-col items-center rounded-2xl border border-border bg-card p-5"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
       <div className="mb-3 flex w-full items-center justify-between">
-        <h3 className="text-[13px] font-semibold text-text">Risk score</h3>
+        <h3 className="text-base font-semibold">Risk score</h3>
         {canBreakdown && (
-          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-text-subtle">
+          <span className="mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             hover for breakdown
           </span>
         )}
@@ -69,7 +72,12 @@ export function RiskScoreCard({ riskScore, confidence, status, estimatedLoss, co
         <Stat label="Status" value={status} valueColor={riskColor(riskScore)} />
         <Stat label="Confidence" value={`${Math.round(confidence)}%`} />
         {estimatedLoss !== undefined && (
-          <Stat label="Est. loss" value={eur(estimatedLoss)} span />
+          <Stat
+            label="Est. loss"
+            value={eur(estimatedLoss)}
+            info={<LossTooltip label={lossLabel} />}
+            span
+          />
         )}
       </div>
 
@@ -80,19 +88,19 @@ export function RiskScoreCard({ riskScore, confidence, status, estimatedLoss, co
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
             transition={{ duration: 0.2 }}
-            className="absolute inset-x-3 top-3 z-10 rounded-lg border border-border-strong bg-surface-2/95 p-4 backdrop-blur-sm"
+            className="absolute inset-x-3 top-3 z-10 rounded-xl border border-border bg-card/95 p-4 backdrop-blur-sm"
           >
-            <p className="mb-3 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
+            <p className="mono mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Risk breakdown
             </p>
             <div className="space-y-2.5">
               {breakdown.map((b) => (
                 <div key={b.label}>
                   <div className="mb-1 flex justify-between text-[12px]">
-                    <span className="text-text-muted">{b.label}</span>
-                    <span className="font-mono tabular text-text">{b.pct}%</span>
+                    <span className="text-muted-foreground">{b.label}</span>
+                    <span className="mono tabular">{b.pct}%</span>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${b.pct}%` }}
@@ -116,18 +124,23 @@ function Stat({
   value,
   valueColor,
   span,
+  info,
 }: {
   label: string;
   value: string;
   valueColor?: string;
   span?: boolean;
+  info?: ReactNode;
 }) {
   return (
     <div
-      className={`rounded-md border border-border bg-surface-2/40 px-3 py-2 ${span ? "col-span-2" : ""}`}
+      className={`rounded-xl border border-border bg-background/40 px-3 py-2 ${span ? "col-span-2" : ""}`}
     >
-      <p className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-text-subtle">{label}</p>
-      <p className="mt-0.5 text-[13px] font-semibold" style={{ color: valueColor ?? "#F1F5F9" }}>
+      <p className="mono flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+        {info}
+      </p>
+      <p className="mt-0.5 text-[13px] font-semibold" style={valueColor ? { color: valueColor } : undefined}>
         {value}
       </p>
     </div>

@@ -1,37 +1,115 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, Euro, MapPin, Users, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
-import {
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { useDashboard } from "../hooks/useDashboard";
-import { eur, riskColor } from "../lib/risk";
+import { eur, SALMON, CRIT_RED, MINT, AMBER } from "../lib/risk";
 import { RiskBadge } from "../components/ui/RiskBadge";
-
-const STATUS_COLORS: Record<string, string> = {
-  Normal: "#10B981",
-  Suspicious: "#F59E0B",
-  Critical: "#EF4444",
-};
+import { LossTooltip } from "../components/ui/LossTooltip";
 
 const KPI_ICONS = [Users, AlertTriangle, MapPin, Euro, Zap];
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  tone = "default",
+  delay = 0,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  tone?: "default" | "critical";
+  delay?: number;
+}) {
+  const labelColor = tone === "critical" ? SALMON : undefined;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+      className="rounded-2xl border border-border bg-card p-5"
+    >
+      <div
+        className="mono flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
+        style={labelColor ? { color: labelColor } : undefined}
+      >
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <div className="mt-4 text-4xl font-bold tracking-tight">{value}</div>
+    </motion.div>
+  );
+}
+
+function RiskDonut({ dist }: { dist: { name: string; value: number }[] }) {
+  const total = dist.reduce((a, b) => a + b.value, 0);
+  const r = 72;
+  const circumference = 2 * Math.PI * r;
+
+  const segmentColors: Record<string, string> = {
+    Normal: MINT,
+    Suspicious: AMBER,
+    Critical: CRIT_RED,
+  };
+
+  let accumulated = 0;
+  const segments = dist.map((d) => {
+    const fraction = total > 0 ? d.value / total : 0;
+    const dash = fraction * circumference;
+    const offset = -accumulated * circumference;
+    accumulated += fraction;
+    return { ...d, dash, offset, color: segmentColors[d.name] ?? MINT };
+  });
+
+  return (
+    <div className="relative grid place-items-center">
+      <svg width="260" height="260" viewBox="0 0 200 200">
+        {/* Track */}
+        <circle
+          cx="100" cy="100" r={r} fill="none"
+          stroke="var(--color-muted)" strokeWidth="3" opacity={0.4}
+        />
+        {/* Segments */}
+        {segments.map((seg, i) => (
+          <motion.circle
+            key={seg.name}
+            cx="100" cy="100" r={r} fill="none"
+            stroke={seg.color}
+            strokeWidth="38"
+            strokeLinecap="butt"
+            strokeDasharray={`${seg.dash} ${circumference - seg.dash}`}
+            transform="rotate(-90 100 100)"
+            initial={{ strokeDashoffset: circumference, opacity: 0 }}
+            animate={{ strokeDashoffset: seg.offset, opacity: 1 }}
+            transition={{ duration: 0.9, delay: i * 0.15, ease: "easeOut" }}
+          />
+        ))}
+      </svg>
+      <motion.div
+        className="absolute text-center"
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
+      >
+        <div className="text-4xl font-bold tracking-tight">
+          {total >= 1000 ? `${(total / 1000).toFixed(total % 1000 === 0 ? 0 : 1)}k` : total}
+        </div>
+        <div className="mono mt-1 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+          Total
+        </div>
+      </motion.div>
+    </div>
+  );
+}
 
 export function DashboardPage() {
   const { data, isLoading } = useDashboard();
 
   if (isLoading || !data) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-24 animate-pulse rounded-xl bg-surface-2" />
+          <div key={i} className="h-28 animate-pulse rounded-2xl bg-card" />
         ))}
       </div>
     );
@@ -41,164 +119,87 @@ export function DashboardPage() {
   const dist = Object.entries(data.risk_distribution)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
-  const total = dist.reduce((a, b) => a + b.value, 0);
-  const districts = [...data.district_risk].sort((a, b) => b.avg_risk - a.avg_risk).slice(0, 10);
+  const top = data.top_risky_customers;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {data.kpis.map((kpi, i) => {
           const Icon = KPI_ICONS[i % KPI_ICONS.length];
           const isMoney = kpi.label.toLowerCase().includes("loss");
+          const isCritical = kpi.label.toLowerCase().includes("high-risk");
           return (
-            <motion.div
+            <StatCard
               key={kpi.label}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="rounded-xl border border-border bg-surface-1 p-4"
-            >
-              <div className="flex items-center gap-2 text-text-subtle">
-                <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-                <span className="font-mono text-[10px] font-medium uppercase tracking-[0.1em]">
-                  {kpi.label}
-                </span>
-              </div>
-              <p className="mt-2 text-[28px] font-bold tabular leading-none text-text">
-                {isMoney ? eur(kpi.value) : Math.round(kpi.value).toLocaleString()}
-              </p>
-            </motion.div>
+              icon={Icon}
+              label={kpi.label}
+              value={isMoney ? eur(kpi.value) : Math.round(kpi.value).toLocaleString()}
+              tone={isCritical ? "critical" : "default"}
+              delay={i * 0.05}
+            />
           );
         })}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        {/* Top 10 high risk */}
-        <div className="rounded-xl border border-border bg-surface-1 lg:col-span-2">
-          <div className="border-b border-border px-5 py-3.5">
-            <h3 className="text-[13px] font-semibold text-text">Top 10 high-risk customers</h3>
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Top 10 table */}
+        <div className="overflow-hidden rounded-2xl border border-border bg-card lg:col-span-2">
+          <div className="border-b border-border bg-muted/40 px-6 py-4">
+            <h2 className="text-base font-semibold">Top 10 high-risk customers</h2>
           </div>
-          <div className="divide-y divide-border/60">
-            {data.top_risky_customers.map((c, i) => (
+          <div className="px-6 py-2">
+            {top.map((c, i) => (
               <Link
                 key={c.customer_id}
                 to={`/customers/${c.customer_id}`}
-                className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2/50"
+                className="flex items-center gap-4 py-3 transition-colors hover:bg-muted/20"
               >
-                <span className="w-5 font-mono text-[12px] text-text-subtle">{i + 1}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium text-text">{c.name}</p>
-                  <p className="truncate font-mono text-[10.5px] text-text-subtle">
+                <div className="mono w-6 text-sm text-muted-foreground">{i + 1}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate">{c.name}</div>
+                  <div className="mono text-xs text-muted-foreground">
                     {c.district} · {c.property_type}
-                  </p>
+                  </div>
                 </div>
-                <span className="hidden font-mono text-[12px] text-text-muted sm:block">
+                <div className="mono flex items-center gap-1 text-sm" style={{ color: SALMON }}>
                   {eur(c.estimated_loss_eur)}
-                </span>
-                <span
-                  className="font-mono text-[14px] font-semibold tabular"
-                  style={{ color: riskColor(c.risk_score) }}
+                  <LossTooltip label={c.loss_label} />
+                </div>
+                <div
+                  className="mono text-lg font-bold w-8 text-right"
+                  style={{ color: SALMON }}
                 >
                   {Math.round(c.risk_score ?? 0)}
-                </span>
+                </div>
                 <RiskBadge status={c.status} />
               </Link>
             ))}
           </div>
         </div>
 
-        {/* Risk distribution */}
-        <div className="rounded-xl border border-border bg-surface-1 p-5">
-          <h3 className="mb-2 text-[13px] font-semibold text-text">Risk distribution</h3>
-          <div className="relative h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={dist}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={58}
-                  outerRadius={82}
-                  paddingAngle={2}
-                  stroke="none"
-                  startAngle={90}
-                  endAngle={-270}
-                >
-                  {dist.map((d) => (
-                    <Cell key={d.name} fill={STATUS_COLORS[d.name] ?? "#64748B"} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#0F1524",
-                    border: "1px solid #334155",
-                    borderRadius: 6,
-                    fontSize: 12,
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-[22px] font-bold tabular text-text">
-                {total >= 1000 ? `${(total / 1000).toFixed(total % 1000 === 0 ? 0 : 1)}k` : total}
+        {/* Risk distribution donut */}
+        <div className="rounded-2xl border border-border bg-card p-6">
+          <h2 className="text-base font-semibold">Risk distribution</h2>
+          <div className="mt-6 grid place-items-center">
+            <RiskDonut dist={dist} />
+          </div>
+          <div className="mt-6 flex flex-col items-center gap-2 text-sm">
+            <div className="flex items-center gap-6">
+              <span className="mono flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full" style={{ background: MINT }} />
+                Normal {dist.find((d) => d.name === "Normal")?.value ?? 0}
               </span>
-              <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-text-subtle">
-                Total
+              <span className="mono flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full" style={{ background: AMBER }} />
+                Suspicious {dist.find((d) => d.name === "Suspicious")?.value ?? 0}
               </span>
             </div>
+            <span className="mono flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full" style={{ background: CRIT_RED }} />
+              Critical {dist.find((d) => d.name === "Critical")?.value ?? 0}
+            </span>
           </div>
-          <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1.5">
-            {dist.map((d) => (
-              <div
-                key={d.name}
-                className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.04em] text-text-muted"
-              >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: STATUS_COLORS[d.name] ?? "#64748B" }}
-                />
-                {d.name} <span className="tabular text-text">{d.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* District risk */}
-      <div className="rounded-xl border border-border bg-surface-1 p-5">
-        <h3 className="mb-4 text-[13px] font-semibold text-text">Risk by district</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={districts} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-              <XAxis
-                dataKey="district"
-                tick={{ fill: "#64748B", fontSize: 10 }}
-                axisLine={{ stroke: "#1F2937" }}
-                tickLine={false}
-                interval={0}
-                angle={-20}
-                textAnchor="end"
-                height={56}
-              />
-              <YAxis tick={{ fill: "#64748B", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                cursor={{ fill: "rgba(255,255,255,0.03)" }}
-                contentStyle={{
-                  backgroundColor: "#0F1524",
-                  border: "1px solid #334155",
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
-                formatter={(v: any) => [`${Number(v).toFixed(1)}`, "Avg risk"]}
-              />
-              <Bar dataKey="avg_risk" radius={[4, 4, 0, 0]}>
-                {districts.map((d) => (
-                  <Cell key={d.district} fill={riskColor(d.avg_risk)} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
         </div>
       </div>
     </div>

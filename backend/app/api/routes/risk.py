@@ -34,6 +34,7 @@ def get_risk(customer_id: str, db: Session = Depends(get_db)) -> RiskResponse:
         status=latest.status,
         groups_fired=latest.groups_fired,
         estimated_loss_eur=latest.estimated_loss_eur,
+        loss_label=latest.loss_label or "",
         reasons=json.loads(latest.reasons_json),
         comparisons=json.loads(latest.comparisons_json),
         triggers=json.loads(latest.triggers_json or "[]"),

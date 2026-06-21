@@ -1,16 +1,27 @@
 import type { RiskStatus } from "../types/domain";
 
+export const SALMON = "#F4A89A";
+export const CRIT_RED = "#EF4444";
+export const AMBER = "#F59E0B";
+export const MINT = "#10B981";
+
 export function riskColor(score: number | null | undefined): string {
   const s = score ?? 0;
-  if (s >= 65) return "#EF4444";
-  if (s >= 38) return "#F59E0B";
-  return "#10B981";
+  if (s >= 70) return CRIT_RED;
+  if (s >= 40) return AMBER;
+  return MINT;
 }
 
 export function statusColor(status?: RiskStatus | string | null): string {
-  if (status === "Critical") return "#EF4444";
-  if (status === "Suspicious") return "#F59E0B";
-  return "#10B981";
+  if (status === "Critical") return CRIT_RED;
+  if (status === "Suspicious") return AMBER;
+  return MINT;
+}
+
+export function toneColor(score: number): string {
+  if (score >= 70) return CRIT_RED;
+  if (score >= 40) return AMBER;
+  return MINT;
 }
 
 export function eur(value: number | null | undefined): string {
@@ -38,7 +49,6 @@ export interface RiskComponents {
   geographic_anomaly: number;
 }
 
-// Weighted contribution of each pillar to the fused risk, normalized to 100%.
 export function riskBreakdown(c: RiskComponents) {
   const weighted = {
     Personal: 0.3 * (c.personal_anomaly ?? 0),
@@ -51,4 +61,11 @@ export function riskBreakdown(c: RiskComponents) {
     label,
     pct: Math.round((value / total) * 100),
   }));
+}
+
+export type RiskLevel = "critical" | "suspicious" | "normal";
+export function riskLevel(r: number): RiskLevel {
+  if (r >= 70) return "critical";
+  if (r >= 40) return "suspicious";
+  return "normal";
 }
