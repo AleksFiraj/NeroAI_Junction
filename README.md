@@ -1,93 +1,148 @@
-# Nero AI AI
+# Nero AI — Explainable Electricity-Theft Detection
 
-Explainable, trigger-based electricity-theft detection for **Tirana, Albania**. Nero AI
-generates a realistic synthetic dataset of metered electricity connections, learns
-normal consumption behavior per customer, and detects non-technical losses (meter
-tampering, illegal connections, seasonal manipulation, neighborhood anomalies, gradual
-theft) using a hybrid of statistical triggers and an Isolation Forest, producing an
-explainable 0-100 risk score.
+Nero AI is a full-stack analytics platform that detects **non-technical losses** (electricity theft) on a power distribution grid and explains *why* every customer was flagged. It combines a registry of statistical fraud triggers with an Isolation Forest anomaly model to produce a transparent **0–100 risk score**, then surfaces the evidence through an operational dashboard, an interactive risk map, and a grounded AI investigation assistant.
 
-## Stack
+The project is modelled on the grid of **Tirana, Albania**, and uses a realistic synthetic dataset of metered connections — but every detector relies only on **utility-observable data** (meter readings, billing history, and network topology), with no demographic assumptions, so the approach maps directly onto a real distribution company (e.g. OSHEE).
 
-- Backend: Python, FastAPI, SQLite, Pandas, NumPy, scikit-learn (Isolation Forest)
-- Frontend: React (Vite + TypeScript), TailwindCSS, Recharts, Leaflet, React Query, Framer Motion
-- Runtime artifacts: `data/nero.db`, `models/isolation_forest.joblib`
+> Non-technical losses — meter tampering, illegal connections, and billing manipulation — cost utilities billions every year. Nero AI turns raw monthly consumption into ranked, explainable investigation leads.
 
-## Backend architecture (`backend/app`)
+---
 
-- `utils/` - Tirana districts + coordinates, monthly temperatures, behavior archetypes
-- `dataset/` - synthetic dataset generation + 5-type fraud injection
-- `features/` - ~25 engineered features across personal, seasonal, peer, geographic and load-shape groups
-- `triggers/` - **Trigger Registry System**: 6 groups, 17 triggers, each emitting a structured output
-- `risk_engine/` - group fusion with a multi-group agreement gate
-- `ml/` - Isolation Forest trained on engineered features only (+ optional PCA reconstruction hook)
-- `explainability/` - deterministic trigger->text reasons + narration-only LLM wrapper
-- `services/` - end-to-end analysis pipeline orchestration
-- `api/` - all REST endpoints; `db/`, `schemas/` - persistence and response models
+## Highlights
 
-## Tirana dataset
+- **Explainable by design** — every risk score is backed by named triggers, each emitting a human-readable reason that always matches the underlying detector.
+- **Hybrid detection** — 17 statistical triggers across 6 independent groups, fused with an Isolation Forest used strictly as a corroborating signal (it can never dominate the score).
+- **Multi-group agreement gate** — the score only climbs when several independent detection families concur, sharply reducing false positives.
+- **Five fraud patterns** — meter tampering, illegal connections, seasonal manipulation, neighborhood anomalies, and gradual theft.
+- **Grounded AI assistant** — a Gemini-powered chat that narrates the computed evidence (and only the evidence), with an automatic data-report fallback if the model is slow or unavailable.
+- **Live re-analysis** — adding new meter readings or advancing a billing month retrains the model and recomputes all risk scores end-to-end.
+- **Polished UI** — animated 3D globe intro, Leaflet risk map, consumption charts, and a risk gauge with a component breakdown.
 
-- ~1000 customers across 10 districts: Tiranë Center, Blloku, Laprakë, Kombinat,
-  Kinostudio, Yzberisht, Fresku, Astir, Ali Demi, Sauk.
-- 4 behavior archetypes with realistic winter/summer kWh bands: Young Family,
-  Single Professional, Retired Couple, Small Business.
-- 24 months per customer driven by the canonical Tirana monthly temperatures
-  (Jan 5 deg C ... Jul/Aug 28 deg C ... Dec 7 deg C).
-- Customers cluster into shared buildings and transformers for clean peer comparison.
-- Fraud injected into 10% of customers across all 5 patterns.
+---
 
-## Trigger Registry System
+## Tech Stack
 
-Each trigger emits: `{ trigger_name, group, score, threshold, evidence_window, features_used, reason }`.
+| Layer | Technologies |
+|-------|--------------|
+| **Backend** | Python, FastAPI, SQLAlchemy, SQLite, Pandas, NumPy, scikit-learn (Isolation Forest), httpx |
+| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4, Framer Motion, Recharts, Leaflet, Three.js, TanStack Query, Axios |
+| **AI** | Google Gemini (`gemini-2.5-flash`), strictly grounded on computed analysis data |
+| **Runtime artifacts** | `data/voltguard.db` (SQLite), `models/isolation_forest.joblib` |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph gen [Data Generation]
+    Synth["Synthetic generator<br/>~1000 connections x 24 months"]
+    Fraud["Fraud injection<br/>5 patterns, ~10%"]
+  end
+
+  subgraph pipe [Analysis Pipeline]
+    Feat["Feature engineering<br/>~25 scale-relative features"]
+    ML["Isolation Forest<br/>anomaly score"]
+    Trig["Trigger registry<br/>17 triggers / 6 groups"]
+    Risk["Risk engine<br/>weighted fusion + agreement gate"]
+    Expl["Deterministic explanations"]
+  end
+
+  subgraph api [FastAPI]
+    REST["REST endpoints"]
+    Gem["Gemini assistant<br/>(grounded, 5s timeout)"]
+  end
+
+  DB[("SQLite")]
+  UI["React UI<br/>Dashboard / Heatmap / Customers / Inspector"]
+
+  Synth --> Fraud --> Feat
+  Feat --> ML --> Trig --> Risk --> Expl --> DB
+  DB --> REST --> UI
+  DB --> Gem --> UI
+```
+
+### How detection works
+
+1. **Feature engineering** — ~25 scale-relative features (deviations, ratios, z-scores, curve distances) are derived per monthly reading across five families: personal history, seasonal, peer, geographic, and load-shape. Raw consumption magnitude alone is never used.
+2. **Anomaly model** — an Isolation Forest (300 trees) trains on the engineered features and outputs a normalized 0–1 anomaly score.
+3. **Trigger registry** — 17 vectorized triggers each score every record 0–1 and "fire" past a threshold, emitting `{ trigger_name, group, score, threshold, evidence_window, features_used, reason }`.
+4. **Risk engine** — trigger groups are fused into four weighted components, gated by multi-group agreement so isolated signals are dampened.
+5. **Explanations** — fired triggers are turned into deterministic, human-readable reasons that always match the detectors exactly.
+
+### Trigger registry
 
 | Group | Triggers |
-| --- | --- |
-| Self-Behavior | sudden_drop, low_usage_persistence, volatility_anomaly |
-| Seasonal | winter_underconsumption, seasonal_inconsistency, temperature_mismatch |
-| Peer Comparison | peer_deviation, building_outlier, z_score_anomaly |
-| Geographic | district_outlier, hotspot_cluster, neighborhood_divergence |
-| Meter Integrity | flatline_usage, repeated_values, abnormal_stability |
-| Load Shape | consumption_shape_distance, historical_pattern_break |
+|-------|----------|
+| Self-Behavior | `sudden_drop`, `low_usage_persistence`, `volatility_anomaly` |
+| Seasonal | `winter_underconsumption`, `seasonal_inconsistency`, `temperature_mismatch` |
+| Peer Comparison | `peer_deviation`, `building_outlier`, `z_score_anomaly` |
+| Geographic | `district_outlier`, `hotspot_cluster`, `neighborhood_divergence` |
+| Meter Integrity | `flatline_usage`, `repeated_values`, `abnormal_stability` |
+| Load Shape | `consumption_shape_distance`, `historical_pattern_break` |
 
-## Risk engine
+### Risk score
 
-Risk score (0-100) fuses four weighted components built from the trigger groups:
+The 0–100 score fuses four weighted components:
 
-- 30% Self-Behavior (+ Meter Integrity, with the Isolation Forest as a capped corroborating signal)
-- 25% Seasonal
-- 25% Peer Comparison
-- 20% Geographic + Load Shape
+- **30%** Self-Behavior (+ Meter Integrity, with the Isolation Forest as a capped corroborating signal)
+- **25%** Seasonal
+- **25%** Peer Comparison
+- **20%** Geographic + Load Shape
 
-A **multi-group agreement gate** strongly dampens the score unless several independent
-trigger groups concur, so no single trigger or group can dominate. Each customer's
-headline risk is the mean of its top-3 risk months over the last 12 months (sustained
-anomaly), with the peak month supplying the trigger evidence. Status: Normal /
-Suspicious (>= 38) / Critical (>= 65).
+A **multi-group agreement gate** scales the raw score by how many independent trigger groups fire (3+ groups = full weight, 2 = 0.85, 1 = 0.40, 0 = 0). Each customer's headline risk is the **mean of its top-3 risk months over the last 12 months** (a sustained anomaly), with the peak month supplying the evidence. Status thresholds: **Normal**, **Suspicious** (≥ 38), **Critical** (≥ 65).
 
-## Frontend pages
+---
 
-- **Dashboard** - KPIs (customers, high-risk, estimated losses, anomalies), top-10
-  high-risk customers, risk-distribution donut, and risk-by-district bars.
-- **Heatmap** - an animated 3D globe (`cobe`) zooms into Tirana, then cross-fades into a
-  Leaflet risk map of flagged customers. Clicking a marker opens a focus card (blurred
-  backdrop) with the risk score and reason, plus an "Investigate with AI" Gemini chat.
-- **Customers** - searchable grid of customer cards; the detail view shows the profile,
-  an AI summary, a risk gauge with a hover breakdown (Personal/Seasonal/Peer/Geographic,
-  for risk > 60), a consumption chart with anomaly months highlighted, and the trigger
-  explainability checklist.
-- **Inspector** - the admin queue of open high-risk cases: review a profile, mark it
-  Fraud/Resolved (removes it from the queue), read AI note cards, add a next-month
-  reading for one customer, or advance the whole dataset by a month - both retrain the ML.
+## Dataset
 
-## AI assistant (Gemini, strict)
+A synthetic but realistic dataset is generated once on first boot:
 
-The AI may ONLY narrate / answer questions about the computed Nero AI analysis data. It
-never computes risk, detects anomalies, or influences scoring. A strict factual context
-is built from the database and the model is instructed not to invent facts. Set
-`GEMINI_API_KEY` in `backend/.env` to enable real Gemini; otherwise a deterministic,
-data-grounded fallback is used.
+- **~1,000 metered connections** across 10 Tirana districts (Tiranë Center, Blloku, Laprakë, Kombinat, Kinostudio, Yzberisht, Fresku, Astir, Ali Demi, Sauk).
+- **24 months** of consumption per connection, driven by the canonical Tirana monthly temperature profile (Jan ~5 °C … Jul/Aug ~28 °C … Dec ~7 °C).
+- **Utility-observable fields only**: `customer_id`, `contract_number`, `meter_id`, `meter_type`, `connection_type`, `building_id`, `transformer_id`, `district`, `property_type`, coordinates, and a consumption archetype. No demographic data (household size, floor area, etc.).
+- Connections cluster into shared **buildings** and **transformers** for clean peer and neighborhood comparison.
+- **Fraud injected into ~10%** of connections across all five patterns, with ground-truth labels used only for validation.
 
-## Quick Start
+---
+
+## Project Structure
+
+```
+EnergyJunction/
+├── backend/
+│   └── app/
+│       ├── api/            # REST endpoints (customers, dashboard, heatmap, risk, ai, ...)
+│       ├── dataset/        # synthetic generation + fraud injection
+│       ├── features/       # ~25 engineered features (personal/seasonal/peer/geo/shape)
+│       ├── triggers/       # trigger registry: 6 groups, 17 triggers
+│       ├── risk_engine/    # weighted fusion + multi-group agreement gate
+│       ├── ml/             # Isolation Forest train/score + model store
+│       ├── explainability/ # deterministic reasons + grounded Gemini assistant
+│       ├── services/       # end-to-end analysis pipeline orchestration
+│       ├── db/             # SQLAlchemy models + session
+│       ├── schemas/        # Pydantic request/response models
+│       └── utils/          # Tirana geography, temperatures, archetypes
+├── frontend/
+│   └── src/
+│       ├── pages/          # Dashboard, Heatmap, Customers, CustomerDetail, Inspector
+│       ├── components/     # ai/ customer/ geo/ inspector/ layout/ ui/
+│       ├── hooks/          # React Query data hooks
+│       ├── api/            # axios client + endpoint map
+│       └── lib/            # risk colors, formatters
+├── models/                 # trained Isolation Forest artifact (generated)
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
 
 ### 1) Install dependencies
 
@@ -96,48 +151,80 @@ python -m pip install --user -r requirements.txt
 cd frontend && npm install
 ```
 
-### 2) (Optional) configure AI
+### 2) (Optional) Enable the Gemini assistant
 
-Copy `backend/.env.example` to `backend/.env` and set `GEMINI_API_KEY` to enable the
-Gemini investigation assistant.
-
-### 3) Start backend (from repo root)
+Copy the example env file and add your key — without it, the assistant automatically falls back to a deterministic, data-grounded report.
 
 ```bash
-python -m uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000 --reload
+cp backend/.env.example backend/.env
+# then set GEMINI_API_KEY in backend/.env
 ```
 
-On first boot the backend generates the Tirana dataset once, trains the model, and runs
-the analysis automatically (this takes ~40s). Afterwards it keeps using that data.
+### 3) Start the backend (from the repo root)
 
-Backend URL: `http://localhost:8000`
+```bash
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --reload
+```
 
-### 4) Start frontend
+On first boot the backend generates the dataset, trains the model, and runs the full analysis automatically (~40s). Subsequent boots reuse the persisted data. Backend: `http://localhost:8000`.
+
+### 4) Start the frontend
 
 ```bash
 cd frontend && npm run dev
 ```
 
-Frontend URL: `http://localhost:5173`
+Frontend: `http://localhost:5173`. The Vite dev server proxies API calls to the backend, so no CORS setup is needed.
 
-### Open on other devices (same Wi‑Fi / LAN)
+> **Open on other devices (same LAN):** the dev server binds to all interfaces and prints a Network URL (e.g. `http://192.168.1.42:5173`). To point the proxy at a custom backend port, set `VITE_API_PROXY_TARGET=http://127.0.0.1:8000` in `frontend/.env`.
 
-1. Start backend and frontend as above.
-2. In the frontend terminal, Vite prints a **Network** URL (e.g. `http://192.168.1.42:5173`).
-3. On your phone or another PC, open that Network URL in the browser.
+---
 
-The dev server binds to all interfaces (`host: true`) and proxies API calls to the backend, so other devices only need port **5173** open on your machine. Ensure Windows Firewall allows incoming connections on that port if prompted.
+## Application Pages
 
-To use a custom backend port when proxying, set `VITE_API_PROXY_TARGET=http://127.0.0.1:8000` in `frontend/.env`.
+- **Dashboard** — KPIs (total customers, high-risk count, estimated losses, anomalies), top-10 high-risk customers, a risk-distribution donut, and risk-by-district bars.
+- **Heatmap** — an animated 3D globe zooms into Tirana, then cross-fades into a Leaflet risk map of flagged connections. Clicking a marker opens a focus card with the risk score and reason, plus an **Investigate with AI** chat.
+- **Customers** — a searchable grid of customer cards; the detail view shows the profile, an AI summary, a risk gauge with a hover breakdown, a consumption chart with anomaly months highlighted, and the trigger explainability checklist.
+- **Inspector** — the operational queue of open high-risk cases: review a profile, mark it **Fraud / Resolved**, add a next-month reading for one customer, bulk-upload readings (CSV/JSON), or advance the whole dataset by a month — all of which retrain the model.
 
-## API Endpoints
+---
 
-- `GET /customers`, `GET /customer/{id}`, `GET /risk/{id}`
-- `GET /dashboard`, `GET /heatmap`
-- `POST /generate-dataset`, `POST /train-model`, `POST /analyze`
-- `POST /ai/chat`, `GET /ai/summary/{id}` (Gemini-grounded; `POST /ai-explanation` kept for back-compat)
-- `POST /consumption/{id}` (add a reading), `POST /advance-month` (bulk) - both retrain
-- `POST /customer/{id}/review` (mark fraud / resolved / open)
+## AI Assistant (Grounded)
+
+The Gemini assistant may **only narrate or answer questions about the computed analysis data** — it never computes risk, detects anomalies, or influences scoring. A strict factual context is built from the database, and the model is instructed to never invent facts.
+
+To keep the UX responsive, the call has a **5-second timeout**. If Gemini is slow, rate-limited, errors, or is not configured, the backend instantly returns a structured **data report** built from the customer's own analysis data — so the user always gets a useful answer.
+
+```mermaid
+flowchart LR
+  Ask["User question"] --> Ctx["Build factual context from DB"]
+  Ctx --> Call{"Gemini responds<br/>within 5s?"}
+  Call -->|Yes| Gem["Grounded AI answer"]
+  Call -->|"No / error"| Report["Structured data report"]
+```
+
+---
+
+## API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/customers` | All connections with risk summary |
+| `GET` | `/customer/{id}` | Full profile + consumption history + triggers |
+| `GET` | `/risk/{id}` | Risk breakdown for one connection |
+| `GET` | `/dashboard` | KPIs, top-10, district risk, trends |
+| `GET` | `/heatmap` | District/building risk aggregates + hotspots |
+| `POST` | `/ai/chat` | Grounded investigation chat (Gemini or data report) |
+| `GET` | `/ai/summary/{id}` | One-shot AI summary for a connection |
+| `POST` | `/analyze` | Re-run the full analysis pipeline |
+| `POST` | `/generate-dataset` | Regenerate the synthetic dataset |
+| `POST` | `/train-model` | Train the Isolation Forest only |
+| `POST` | `/consumption/{id}` | Add a monthly reading (retrains) |
+| `POST` | `/advance-month` | Advance all connections one month (retrains) |
+| `POST` | `/bulk-upload` | Bulk-import readings via CSV/JSON (retrains) |
+| `POST` | `/customer/{id}/review` | Mark a case Fraud / Resolved / open |
+
+---
 
 ## Validation
 
@@ -147,6 +234,14 @@ A smoke check runs the full flow and asserts every endpoint:
 cd backend && python tests/smoke_check.py
 ```
 
-On a 1000-customer / 24-month dataset the system detects roughly 99% of injected fraud
-customers (>90% target) at a low false-positive rate, with explanations that match the
-fired triggers exactly.
+On a 1,000-customer / 24-month dataset, the system detects roughly **99% of injected fraud customers** (target > 90%) at a low false-positive rate, with explanations that match the fired triggers exactly.
+
+---
+
+## Design Principles
+
+1. **Explainability first** — no black-box score; every flag traces back to named, human-readable evidence.
+2. **Agreement over intensity** — multiple independent detection families must concur before a case escalates.
+3. **ML as corroboration** — the Isolation Forest supports the statistical triggers but is capped so it cannot dominate.
+4. **AI is narration-only** — the assistant explains existing analysis; it never invents findings or computes risk.
+5. **Utility-realistic** — only data a distribution company actually has (meters, billing, topology) is ever used.

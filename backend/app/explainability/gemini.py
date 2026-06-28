@@ -206,14 +206,13 @@ def _data_report(ctx: dict[str, Any], question: str = "") -> str:
     )
 
 
-GEMINI_TIMEOUT_SECONDS = 10
-GEMINI_TIMEOUT_SENTINEL = "__gemini_timeout__"
+GEMINI_TIMEOUT_SECONDS = 5
 
 
 async def _call_gemini(system: str, context_text: str, turns: list[dict[str, str]]) -> str | None:
     settings = get_settings()
     if not settings.gemini_api_key:
-        log.warning("GEMINI_API_KEY is not set — using data-based answer")
+        log.warning("GEMINI_API_KEY is not set — using data report")
         return None
 
     contents: list[dict[str, Any]] = [
@@ -238,12 +237,12 @@ async def _call_gemini(system: str, context_text: str, turns: list[dict[str, str
                 url, params={"key": settings.gemini_api_key}, json=payload
             )
             if resp.status_code != 200:
-                log.warning("Gemini returned HTTP %s — using data-based answer", resp.status_code)
+                log.warning("Gemini HTTP %s — using data report", resp.status_code)
                 return None
             data = resp.json()
             candidates = data.get("candidates") or []
             if not candidates:
-                log.warning("Gemini returned no candidates — using data-based answer")
+                log.warning("Gemini returned no candidates — using data report")
                 return None
             parts = candidates[0].get("content", {}).get("parts") or []
             text = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
@@ -251,10 +250,10 @@ async def _call_gemini(system: str, context_text: str, turns: list[dict[str, str
                 log.info("Gemini responded successfully (%d chars)", len(text))
             return text or None
     except httpx.TimeoutException:
-        log.info("Gemini timed out after %ds — using data-based answer", GEMINI_TIMEOUT_SECONDS)
-        return GEMINI_TIMEOUT_SENTINEL
+        log.info("Gemini timed out after %ds — using data report", GEMINI_TIMEOUT_SECONDS)
+        return None
     except Exception:
-        log.exception("Gemini call failed — using data-based answer")
+        log.exception("Gemini call failed — using data report")
         return None
 
 
@@ -266,12 +265,9 @@ async def investigate_chat(
         return {"mode": "error", "answer": "Customer not found."}
 
     text = await _call_gemini(SYSTEM_INSTRUCTION, _context_text(ctx), messages)
-    if text == GEMINI_TIMEOUT_SENTINEL:
-        last = messages[-1]["content"] if messages else ""
-        return {"mode": "data_report", "answer": _data_report(ctx, last)}
     if not text:
         last = messages[-1]["content"] if messages else ""
-        return {"mode": "fallback", "answer": _fallback_answer(ctx, last)}
+        return {"mode": "data_report", "answer": _data_report(ctx, last)}
     return {"mode": "gemini", "answer": text}
 
 
@@ -291,8 +287,6 @@ async def investigate_summary(db: Session, customer_id: str) -> dict[str, Any]:
         }
     ]
     text = await _call_gemini(SYSTEM_INSTRUCTION, _context_text(ctx), prompt)
-    if text == GEMINI_TIMEOUT_SENTINEL:
-        return {"mode": "data_report", "summary": _data_report(ctx, "summary")}
     if not text:
-        return {"mode": "fallback", "summary": _fallback_summary(ctx)}
+        return {"mode": "data_report", "summary": _data_report(ctx, "summary")}
     return {"mode": "gemini", "summary": text}
